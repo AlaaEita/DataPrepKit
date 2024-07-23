@@ -26,12 +26,18 @@ def is_classification_problem(target):
 def train_classification_model(data, target_variable, models):
     # Add your logic to train classification models
     # Return the trained classifier and the best model
-    pass
+    classifier = None  # Placeholder, replace with the actual trained classifier
+    best_model = None  # Placeholder, replace with the actual best model
+
+    return classifier, best_model
 
 def train_regression_model(data, target_variable, models):
     # Add your logic to train regression models
     # Return the trained regressor and the best model
-    pass
+    regressor = None  # Placeholder, replace with the actual trained regressor
+    best_model = None  # Placeholder, replace with the actual best model
+
+    return regressor, best_model
 
 def main():
     # Load your data
