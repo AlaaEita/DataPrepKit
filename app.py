@@ -1,96 +1,85 @@
-import pandas as pd
-import pycaret.classification as pc
-import pycaret.regression as pr
 import streamlit as st
-
-def load_data(file_path):
-    # Load the data using pandas
-    data = pd.read_csv(file_path)
-    return data
-
-data = pd.read_csv("heart.csv")
-import matplotlib.pyplot as plt
+import pandas as pd
+import plotly.express as px
 import seaborn as sns
+import matplotlib.pyplot as plt
+from pycaret.classification import setup as clf_setup, compare_models as compare_clf_models
+from pycaret.regression import setup as reg_setup, compare_models as compare_reg_models
+from pycaret.datasets import get_data
 
-# Load your data
-@st.cache
-def load_data():
-    data = pd.read_csv("heart.csv")
-    return data
+# Function to determine if the problem is classification or regression
+def determine_task_type(data, target_column):
+    if data[target_column].dtype in [float, int]:
+        return 'regression'
+    else:
+        return 'classification'
 
-def is_classification_problem(target):
-    # Add your logic to determine if it's a classification problem
-    # Return True or False accordingly
-    pass
+st.title("PyCaret Machine Learning App")
 
-def train_classification_model(data, target_variable, models):
-    # Add your logic to train classification models
-    # Return the trained classifier and the best model
-    classifier = None  # Placeholder, replace with the actual trained classifier
-    best_model = None  # Placeholder, replace with the actual best model
+# File uploader for data
+uploaded_file = st.file_uploader("Upload your CSV file", type="csv")
+if uploaded_file:
+    data = pd.read_csv(uploaded_file)
+    st.write("Data Preview:")
+    st.write(data.head())
 
-    return classifier, best_model
+    # Columns selection
+    all_columns = data.columns.tolist()
+    drop_columns = st.multiselect("Select columns to drop", all_columns)
+    if drop_columns:
+        data.drop(columns=drop_columns, inplace=True)
 
-def train_regression_model(data, target_variable, models):
-    # Add your logic to train regression models
-    # Return the trained regressor and the best model
-    regressor = None  # Placeholder, replace with the actual trained regressor
-    best_model = None  # Placeholder, replace with the actual best model
+    # Perform EDA
+    perform_eda = st.checkbox("Perform Exploratory Data Analysis (EDA)?")
+    if perform_eda:
+        columns_for_eda = st.multiselect("Select columns for EDA", data.columns)
+        st.write("Selected columns for EDA:")
+        st.write(data[columns_for_eda].describe())
 
-    return regressor, best_model
-
-def main():
-    # Load your data
-    data = load_data()
-
-    # Display selectbox after data is loaded
-    target_variable = st.selectbox("Select target variable", data.columns.tolist())
-    models = st.multiselect("Select models to train", ["lr", "rf", "xgboost"])
-
-    if st.button("Train"):
-        if target_variable and models:
-            if data is not None:
-                if is_classification_problem(data[target_variable]):
-                    clf, best_model = train_classification_model(data, target_variable, models)
-                    st.write("Classification models trained successfully!")
-                    st.write("Best model:", best_model)
+    # Handling missing values
+    for col in data.columns:
+        if data[col].isnull().sum() > 0:
+            if data[col].dtype == 'object':
+                strategy = st.radio(f"Choose strategy for handling missing values in '{col}' (categorical)", ('Mode', 'Add New Class'))
+                if strategy == 'Mode':
+                    data[col].fillna(data[col].mode()[0], inplace=True)
                 else:
-                    reg, best_model = train_regression_model(data, target_variable, models)
-                    st.write("Regression models trained successfully!")
-                    st.write("Best model:", best_model)
+                    data[col].fillna('Unknown', inplace=True)
             else:
-                st.write("Please upload a CSV file.")
-        else:
-            st.write("Please select the target variable and models.")
+                strategy = st.radio(f"Choose strategy for handling missing values in '{col}' (continuous)", ('Mean', 'Median', 'Mode'))
+                if strategy == 'Mean':
+                    data[col].fillna(data[col].mean(), inplace=True)
+                elif strategy == 'Median':
+                    data[col].fillna(data[col].median(), inplace=True)
+                else:
+                    data[col].fillna(data[col].mode()[0], inplace=True)
 
-    # Display summary statistics
-    summary_stats = data.describe()
-    st.write("Summary Statistics:")
-    st.write(summary_stats)
+    # Encoding categorical data
+    encode_method = st.radio("How to encode categorical data?", ('One-Hot Encoding', 'Label Encoding'))
+    if encode_method == 'Label Encoding':
+        for col in data.select_dtypes(include=['object']).columns:
+            data[col] = data[col].astype('category').cat.codes
+    elif encode_method == 'One-Hot Encoding':
+        data = pd.get_dummies(data, drop_first=True)
 
-    # Visualize data
-    # Example: Histogram of a numerical variable
-    fig, ax = plt.subplots()
-    sns.histplot(data["age"], bins=10)
-    ax.set_title("Distribution of Age")
-    ax.set_xlabel("Age")
-    ax.set_ylabel("Count")
-    st.pyplot(fig)
+    # Choose X and y
+    X = st.selectbox("Select X (independent variables)", data.columns)
+    y = st.selectbox("Select y (target variable)", data.columns)
 
-    # Example: Bar plot of a categorical variable
-    fig, ax = plt.subplots()
-    sns.countplot(data["sex"])
-    ax.set_title("Count of Sex")
-    ax.set_xlabel("Sex")
-    ax.set_ylabel("Count")
-    st.pyplot(fig)
+    # Determine task type
+    task_type = determine_task_type(data, y)
 
-    # Example: Correlation heatmap
-    fig, ax = plt.subplots()
-    correlation_matrix = data.corr()
-    sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm")
-    ax.set_title("Correlation Heatmap")
-    st.pyplot(fig)
+    # PyCaret setup and training
+    st.write(f"Detected Task Type: {task_type}")
+    if task_type == 'classification':
+        clf_setup(data, target=y)
+        best_model = compare_clf_models()
+    else:
+        reg_setup(data, target=y)
+        best_model = compare_reg_models()
 
-if __name__ == "__main__":
-    main()
+    # Display model report
+    st.write("Best Model:")
+    st.write(best_model)
+
+
